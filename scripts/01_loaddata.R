@@ -12,13 +12,23 @@ datadif <- function(d1,d2,...) {
   d1[! d1p %in% d2p,]
 }
 
+# a function to bring a quarterdate in the form a timestamp
+convert_quarter_dates <- function(myinput="20191",monthday=15) {
+  year <- substr(myinput,1,4)
+  q <- substr(myinput,5,5)
+  m <- 3*as.numeric(q)-1
+  date <- as.Date(paste0(year,sprintf("%02d",m),monthday),'%Y%m%d')
+  return(date)
+}
 #Step 2: define constants
 debug <- FALSE
 
 #Step 3: load data
-orig_dataset <- read_delim("input/rawdata/fte.csv", ";", escape_double = FALSE, locale = locale(decimal_mark = ",", grouping_mark = ".", asciify = TRUE), trim_ws = TRUE)
+#use fte2 dataset for more detailed info
+datafilename="fte2.csv"
+orig_dataset <- read_delim(paste0("input/rawdata/",datafilename), delim= ";", escape_double = FALSE, locale = locale(decimal_mark = ",", grouping_mark = ".", asciify = TRUE), trim_ws = TRUE)
 #save a copy to work with
-fte_data <- read_delim("input/rawdata/fte.csv",";", escape_double = FALSE, locale = locale(decimal_mark = ",",asciify = TRUE), trim_ws = TRUE)
+fte_data <- read_delim(paste0("input/rawdata/",datafilename),delim = ";", escape_double = FALSE, locale = locale(decimal_mark = ",",asciify = TRUE), trim_ws = TRUE)
 
 #Step 4: clean data
 
@@ -99,12 +109,36 @@ fte_data <- bind_rows(fte_data_no_fgr,fte_data_schaal,fte_data_ss,fte_data_s,fte
 fte_data <- fte_data %>% mutate(fte_count = if_else(is.na(fte_count),0,fte_count))
 #4g. make the year, quater to numeric
 fte_data <- fte_data %>% mutate_at(vars(year,quarter),as.numeric)
+#4i add a column year*10+quarter (used in quarter_dates)
+fte_data <- fte_data %>% mutate(tijd=quarter+10*year)
+#4i add colum that converts quarter to date
+fte_data <- fte_data %>% mutate(times=convert_quarter_dates(tijd)) 
+#4j dd some acronyms used for binding old years to current year (not exact, 100% fte's is assumed to go over)
+fte_data <- fte_data %>% mutate(Afk=case_when(
+  .$Instelling == "Algemene Zaken" ~ "AZ",
+  .$Instelling == "Binnenlandse Zaken en Koninkrijksrelaties" ~ "BZK",
+  .$Instelling == "Buitenlandse Zaken" ~ "BZ",
+  .$Instelling == "Economische Zaken en Klimaat" ~ "EZK",
+  .$Instelling == "Economische Zaken" ~ "EZK",
+  .$Instelling == "Financien" ~ "FIN",
+  .$Instelling == "Hoge Colleges van Staat" ~ "HCS",
+  .$Instelling == "Infrastructuur en Milieu" ~ "IenW",
+  .$Instelling == "Infrastructuur en Waterstaat" ~ "IenW",
+  .$Instelling == "Justitie en Veiligheid" ~ "JenV",
+  .$Instelling == "Landbouw, Natuur en Voedselkwaliteit" ~ "EZK",
+  .$Instelling == "Onderwijs, Cultuur en Wetenschap" ~ "OCW",
+  .$Instelling == "Sociale Zaken en Werkgelegenheid" ~ "SZW",
+  .$Instelling == "Veiligheid en Justitie" ~ "JenV",
+  .$Instelling == "Volksgezondheid, Welzijn en Sport" ~ "VWS"
+))
 #4h. give an overview of the converted data
 summary(fte_data)
 
 #Step 5: save cleaned data to disk
-write_delim(fte_data,path="input/cleaneddata/fte_cleaned.csv", delim=";", col_names = TRUE)
+# write detailed info set
+write_delim(fte_data,path=paste0("input/cleaneddata/",datafilename), delim=";", col_names = TRUE)
 
 #Step 6: cleanup variables
 rm(aa,fte_data_no_fgr,fte_data_s,fte_data_schaal,fte_data_ss,fte_data_top1,fte_data_top2,un_treated,nr_treated,regstr)
 rm(ids,ids_orig,nofgr_id,s_id,schaal_id,ss_id,top1_id,top2_id)
+
